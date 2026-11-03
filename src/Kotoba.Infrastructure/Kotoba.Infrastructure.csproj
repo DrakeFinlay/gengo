@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources/kanjidic2-all.json.zip" />
+    <ProjectReference Include="../Kotoba.Core/Kotoba.Core.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <PackageReference Include="LibNMeCab" Version="0.10.2" />
+  </ItemGroup>
+</Project>
