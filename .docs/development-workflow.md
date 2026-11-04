@@ -69,9 +69,13 @@ the GUI. Build/publish script edits should at least be parsed for PowerShell syn
 ## Package and report
 
 Close running app instances before replacing their locked binaries; preserve any
-unsaved work. Publish creates `artifacts/Gengo/Gengo.exe` and copies licenses,
-README and `.docs/`. It is a snapshot of that build, not an automatically rebuilt
-shortcut. The launcher clears inherited test-data overrides unless an explicit
+unsaved work. Both normal `scripts/build.ps1` and `-Publish` create a staged
+self-contained package, then replace the single `artifacts/Gengo` folder and
+refresh the permanent root `Gengo.exe.lnk` shortcut. Normal builds also compile
+Debug first; `-Publish` skips that extra compilation. Do not create feature-specific
+artifact folders. Failed builds retain the previous usable package. The shortcut
+opens `scripts/launch.ps1` with a hidden PowerShell window; the launcher clears
+inherited test-data overrides unless an explicit
 `-DataDirectory` is provided.
 
 Update IMPLEMENTATION with real grammar/morphology coverage and limitations.

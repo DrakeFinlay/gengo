@@ -2,18 +2,51 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Kotoba.App;
 
 public partial class MainWindow
 {
     internal const double TextSizeStep = 8.0 / 3; // Two typographic points in WPF device-independent units.
+    private bool readingBoundsQueued;
     internal void ChangeTextSize(int direction) => FontSlider.Value = Math.Clamp(FontSlider.Value + direction * TextSizeStep, FontSlider.Minimum, FontSlider.Maximum);
     private void UpdateReadingBounds()
     {
         AppHeader.Visibility = ActualHeight < 720 ? Visibility.Collapsed : Visibility.Visible;
-        Sentence.MaxHeight = Math.Max(ActualHeight < 720 ? 55 : 155, JapaneseSize * 2.4);
-        Input.MaxHeight = Math.Max(ActualHeight < 720 ? 55 : 92, JapaneseSize * .85 + 24);
+        var sentenceLimit = 2 * Math.Max(ActualHeight < 720 ? 55 : 155, JapaneseSize * 2.4);
+        var inputLimit = 2 * Math.Max(ActualHeight < 720 ? 55 : 92, JapaneseSize * .85 + 24);
+        // Grow naturally with content. On short windows, share the available space
+        // instead of allowing two long editors to push the dictionary panes away.
+        if (SearchWorkspace.ActualHeight > 0 && SearchInputCard.ActualHeight > 0)
+        {
+            var overhead = SearchInputCard.ActualHeight - Input.ActualHeight + SearchInputCard.Margin.Top + SearchInputCard.Margin.Bottom;
+            var sentenceVisible = SentenceCard.Visibility == Visibility.Visible;
+            if (sentenceVisible) overhead += SentenceCard.ActualHeight - Sentence.ActualHeight + SentenceCard.Margin.Top + SentenceCard.Margin.Bottom;
+            if (SetupBanner.Visibility == Visibility.Visible) overhead += SetupBanner.ActualHeight + SetupBanner.Margin.Top + SetupBanner.Margin.Bottom;
+            var budget = Math.Max(128, SearchWorkspace.ActualHeight - overhead - 140);
+            var inputNeed = Math.Min(inputLimit, Math.Max(48, Input.ActualHeight + Math.Max(0, Input.ExtentHeight - Input.ViewportHeight)));
+            var sentenceNeed = sentenceVisible ? Math.Min(sentenceLimit, Sentence.ActualHeight + Math.Max(0, Sentence.ExtentHeight - Sentence.ViewportHeight)) : 0;
+            if (inputNeed + sentenceNeed > budget)
+            {
+                var ratio = budget / (inputNeed + sentenceNeed);
+                inputLimit = Math.Max(48, inputNeed * ratio);
+                sentenceLimit = Math.Max(JapaneseSize * 2.4, sentenceNeed * ratio);
+            }
+        }
+        if (Math.Abs(Sentence.MaxHeight - sentenceLimit) > .5) Sentence.MaxHeight = sentenceLimit;
+        if (Math.Abs(Input.MaxHeight - inputLimit) > .5) Input.MaxHeight = inputLimit;
+    }
+    private void ReadingWorkspaceSizeChanged(object sender, SizeChangedEventArgs e) => QueueReadingBounds();
+    private void QueueReadingBounds()
+    {
+        if (!initialized || readingBoundsQueued) return;
+        readingBoundsQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { readingBoundsQueued = false; UpdateReadingBounds(); });
+    }
+    private void ReadingExtentChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.ExtentHeightChange != 0 || e.ViewportHeightChange != 0) QueueReadingBounds();
     }
     private void ApplyTextSize()
     {

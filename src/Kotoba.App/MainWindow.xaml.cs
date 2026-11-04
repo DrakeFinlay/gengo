@@ -50,6 +50,8 @@ public partial class MainWindow : Window
         dataDirectory = Environment.GetEnvironmentVariable("KOTOBA_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Kotoba");
         store = new(dataDirectory);
         InitializeComponent();
+        Input.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(ReadingExtentChanged));
+        Sentence.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(ReadingExtentChanged));
         AnkiDeckInput.Text = KanjiOptions.Deck; AnkiExpressionInput.Text = KanjiOptions.ExpressionField; AnkiMeaningInput.Text = KanjiOptions.MeaningField;
         SizeChanged += (_, _) => UpdateReadingBounds();
         FontSlider.Value = double.TryParse(store.Setting("fontSize", "24"), CultureInfo.InvariantCulture, out var size) ? Math.Clamp(size, FontSlider.Minimum, FontSlider.Maximum) : 24;
@@ -77,7 +79,8 @@ public partial class MainWindow : Window
         };
         initialized = true;
         ApplyTextSize(); PopulateTerminology();
-        Loaded += async (_, _) => await Safely(async () => { await Task.Run(LoadResources); RefreshResources(); RefreshPersonal(); Input.Focus(); });
+        Loaded += async (_, _) => await Safely(async () => { await Task.Run(LoadResources); RefreshResources(); RefreshPersonal(); await InitializeAi(); Input.Focus(); });
+        Closed += (_, _) => { CancelAiRequests(); aiSignIn?.Cancel(); aiHttp.Dispose(); ollamaHttp.Dispose(); };
     }
     private void LoadResources()
     {
@@ -97,6 +100,7 @@ public partial class MainWindow : Window
     }
     private CancellationToken BeginOperation(string message)
     {
+        CancelAiRequests();
         operation?.Cancel(); operation?.Dispose(); operation = new(); generation++;
         SearchButton.IsEnabled = false; InstallButton.IsEnabled = false; CancelButton.IsEnabled = true; CancelInstallButton.IsEnabled = true; Status.Text = message;
         return operation.Token;
@@ -127,12 +131,13 @@ public partial class MainWindow : Window
             ResetKanji(); WordsHint.Visibility = Visibility.Visible;
             DefinitionPanel.Children.Clear(); AlternativesPanel.Children.Clear(); GrammarPanel.Children.Clear(); RenderSentence();
             Status.Text = $"{result.Units.Count(u => u.EntryIds.Length > 0):N0} dictionary units · Click a word for its definition";
+            if (!result.Units.Any(u => u.EntryIds.Length > 0)) ShowNoMatch(text);
         }
         finally { FinishOperation(); }
     }
     private async void SearchClick(object sender, RoutedEventArgs e) => await Safely(() => Search(Input.Text));
     private void CancelClick(object sender, RoutedEventArgs e) { operation?.Cancel(); generation++; Status.Text = "Canceling…"; }
-    private void InputChanged(object sender, TextChangedEventArgs e) { if (CharacterLabel is not null) CharacterLabel.Text = $"{TextRules.CharacterCount(Input.Text):N0} characters"; }
+    private void InputChanged(object sender, TextChangedEventArgs e) { if (CharacterLabel is not null) CharacterLabel.Text = $"{TextRules.CharacterCount(Input.Text):N0} characters"; QueueReadingBounds(); }
     private async void WindowKeyDown(object sender, KeyEventArgs e)
     {
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && !Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
@@ -194,20 +199,38 @@ public partial class MainWindow : Window
     }
     internal void OpenUnit(Unit unit)
     {
+        CancelAiRequests();
         selectedUnit = unit;
         WordsHint.Visibility = Visibility.Collapsed;
-        var entries = unit.EntryIds.Select(Resolve).OfType<Entry>().ToArray();
+        var entries = EntriesFor(unit);
         if (entries.Length == 0)
         {
             displayedEntry = null; AnkiCopyText = "";
             lookupSelection.Clear(); DefinitionPanel.Children.Clear(); AlternativesPanel.Children.Clear();
-            var panel = new StackPanel(); panel.Children.Add(SelectableLabel($"{unit.Surface} · No dictionary match", 20));
-            panel.Children.Add(ResultLabel("Keep the original text or add your own expression and reading.", 14, Muted));
-            panel.Children.Add(ActionButton("Add personal entry", () => StartEntry(unit.Surface))); DefinitionPanel.Children.Add(Card(panel)); RenderSentence(); RefreshKanji(unit); WordsScroll.ScrollToTop(); Status.Text = unit.Surface + " · No dictionary match"; return;
+            ShowNoMatch(unit.Surface); RenderSentence(); RefreshKanji(unit); return;
         }
         OpenDefinition(entries[0], unit, true);
     }
+    private void ShowNoMatch(string expression)
+    {
+        WordsHint.Visibility = Visibility.Collapsed;
+        var panel = new StackPanel(); panel.Children.Add(SelectableLabel($"{expression} · No dictionary match", 20));
+        panel.Children.Add(ResultLabel("Add this expression to your personal dictionary with your own definition and optional reading.", 14, Muted));
+        var form = new StackPanel { Visibility = Visibility.Collapsed };
+        Button? add = null;
+        add = ActionButton("Add personal dictionary item", () =>
+        {
+            form.Children.Clear();
+            add!.Visibility = Visibility.Collapsed; form.Visibility = Visibility.Visible;
+            BuildInlinePersonalEntry(form, expression, () => { form.Visibility = Visibility.Collapsed; add!.Visibility = Visibility.Visible; add.Focus(); });
+        });
+        add.Name = "AddUnmatchedPersonalEntry"; panel.Children.Add(add);
+        panel.Children.Add(form);
+        AddAiAssistance(panel, expression, null, selectedUnit?.Surface == expression ? selectedUnit : null);
+        DefinitionPanel.Children.Add(Card(panel)); WordsScroll.ScrollToTop(); Status.Text = expression + " · No dictionary match";
+    }
     private Entry? Resolve(string id) => id.StartsWith("personal:", StringComparison.Ordinal) ? store.Entries().FirstOrDefault(e => e.Id == id)?.AsEntry() : reference?.Get(id);
+    private Entry[] EntriesFor(Unit unit) => reference is null ? unit.EntryIds.Select(Resolve).OfType<Entry>().ToArray() : LookupCandidates.For(unit, reference, store.Entries());
     private async void GrammarClick(object sender, RoutedEventArgs e) => await Safely(async () =>
     {
         if (analysis is null || operation is not null) return;
@@ -291,6 +314,7 @@ public partial class MainWindow : Window
             DefinitionPanel.Children.Clear(); GrammarPanel.Children.Clear(); AlternativesPanel.Children.Clear(); RenderSentence();
             ResetKanji(); WordsHint.Visibility = Visibility.Visible;
             Status.Text = "Personal dictionary applied · No new search or lookup recorded";
+            if (!result.Units.Any(u => u.EntryIds.Length > 0)) ShowNoMatch(text);
         }
         finally { FinishOperation(); }
     }
@@ -311,7 +335,11 @@ public partial class MainWindow : Window
         var result = await Task.Run(() => (Words: store.Statistics(bounds.From, bounds.Until), History: store.History(offset, 30, bounds.From, bounds.Until), Daily: store.DailyTotals(bounds.From, bounds.Until, TimeZoneInfo.Local), Clicks: store.Clicks(null, bounds.From, bounds.Until)));
         if (revision != historyRevision) return;
         StatisticsList.Items.Clear(); ClickDetails.Text = "";
-        foreach (var word in result.Words) StatisticsList.Items.Add(new ListBoxItem { Content = Label($"{word.Root}   {word.Reading}     {word.Count} lookups\nFirst: {word.First.LocalDateTime:g}   ·   Last: {word.Last.LocalDateTime:g}", 15), Tag = word });
+        foreach (var word in result.Words)
+        {
+            var item = new ListBoxItem { Content = Label($"{word.Root}   {word.Reading}     {word.Count} lookups\nFirst: {word.First.LocalDateTime:g}   ·   Last: {word.Last.LocalDateTime:g}", 15), Tag = word };
+            item.MouseDoubleClick += StatisticDoubleClick; StatisticsList.Items.Add(item);
+        }
         TotalsText.Text = $"{result.Daily.Sum(d => d.Count):N0} deliberate lookups · {result.Words.Length:N0} words opened at least five times";
         DailyText.Text = result.Daily.Length == 0 ? "No lookups yet." : string.Join("   ·   ", result.Daily.Take(90).Select(d => $"{d.Day:yyyy-MM-dd}: {d.Count}")) + (result.Daily.Length > 90 ? "\nShowing the most recent 90 days; choose dates to see earlier totals." : "");
         HistoryPanel.Children.Clear();
@@ -331,10 +359,12 @@ public partial class MainWindow : Window
     private void Reopen(SearchRecord record)
     {
         if (operation is not null) return;
+        CancelAiRequests();
         analysis = record.Analysis; searchId = record.Id; lookupSelection.Clear(); displayedEntry = null; AnkiCopyText = ""; selectedUnit = null; grammar = [];
         ResetKanji(); WordsHint.Visibility = Visibility.Visible;
         Input.Text = record.Text; DefinitionPanel.Children.Clear(); GrammarPanel.Children.Clear(); AlternativesPanel.Children.Clear(); Navigation.SelectedIndex = 0; RenderSentence();
         Status.Text = "Saved analysis reopened · No new search or click recorded";
+        if (!record.Analysis.Units.Any(u => u.EntryIds.Length > 0)) ShowNoMatch(record.Text);
     }
     private async void StatisticSelected(object sender, SelectionChangedEventArgs e) => await Safely(async () =>
     {
@@ -400,6 +430,7 @@ public partial class MainWindow : Window
         ResetKanji(); WordsHint.Visibility = Visibility.Visible; ruby?.Dispose(); ruby = null; renderedAnalysis = null;
         RefreshPersonal(); StartEntry(""); Navigation.SelectedIndex = 3; RefreshResources();
         FontSlider.Value = double.TryParse(store.Setting("fontSize", "24"), CultureInfo.InvariantCulture, out var size) ? Math.Clamp(size, FontSlider.Minimum, FontSlider.Maximum) : 24;
+        await InitializeAi();
         Status.Text = "Restored. Safety backup: " + safety;
     });
     private void WindowClosing(object? sender, CancelEventArgs e)

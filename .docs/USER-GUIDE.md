@@ -11,8 +11,11 @@ Gengo is not a sentence translator. For the implementation, see
 
 ## Install and open
 
-1. Open `artifacts/Gengo/Gengo.exe` in the repository, or `Gengo.exe` in a copied
-   published folder. Keep the whole folder together, including DLLs and licenses.
+1. Open the permanent **Gengo.exe** shortcut in the project root
+   (`Gengo.exe.lnk`), or `Gengo.exe` in a copied published folder. The shortcut
+   always uses `artifacts/Gengo/Gengo.exe`, refreshed by each successful normal or
+   `-Publish` build. Keep the whole published folder together, including DLLs and
+   licenses. Close Gengo before rebuilding; no per-feature preview folders are needed.
 2. Open **Settings → Install offline resources**. Confirm the download and wait
    for installation/indexing. Expect approximately 62 MiB downloaded and about
    500 MiB on disk, including retained source archives.
@@ -48,6 +51,20 @@ and are removed when copying or looking up passage selections. Original spaces
 and line breaks are retained. Furigana helps with readings but is not proof that
 the chosen dictionary sense fits the sentence.
 
+The search input and Choose a word area grow with wrapped or multiline text before
+scrolling, up to twice their previous height limits (normally 184 and 310 WPF
+units). Short windows share the available height so the definition panes remain
+usable. Furigana is clipped to the passage viewport and hidden when its base text
+is clipped; scrolling cannot leave old readings outside the text area.
+
+When a spelling has multiple dictionary entries, **Other readings and entries**
+above the definitions lets you open each one. For example, 悪 includes 悪【あく】
+and 悪【わる】 alongside a contextually chosen adjective root. Hover a choice for
+a meaning preview, or open it for every sense and its reading. More detailed
+candidate previews remain below the selected definitions; **Other Forms** lists
+compatible readings/spellings belonging to the same entry. Showing these choices
+does not count as a lookup; deliberately opening one does.
+
 Select passage text and right-click for **Copy**, **Look up selection**, or
 **Add personal entry**. Selection lookup is useful when segmentation is wrong.
 Keyboard users can focus the passage, move its caret, and press Enter on a unit.
@@ -81,6 +98,21 @@ Spelling and meanings can be selected and copied. **ANKI card copy** copies the
 selected dictionary spelling/reading as `巨大[きょだい]`. Kana-only entries omit
 a redundant reading. Paste it into an Anki Front field yourself; this button
 does not create or modify a note.
+
+**Copy all definitions**, below the meanings, copies only the English definitions.
+A single sense has no number; multiple senses keep `1.`, `2.`, etc., each on its
+own line. Glosses within a sense stay separated by semicolons. The clipboard
+includes plain text and HTML line breaks for pasting into an Anki definition field.
+
+When a search has no dictionary matches, the Words area immediately shows
+**Add personal dictionary item** below the unmatched text. Click it to expand a
+form directly in Search with the full submitted expression filled in. Enter an
+English definition, optional reading and notes, and choose Personal words or Names.
+Click **Save entry** to save, reanalyze the current passage, and display the new
+definition while staying in Search. **Cancel** closes the form without saving.
+Required-field errors appear inside the form. This also works for
+an unmatched word clicked within a passage; that button prefills only that word.
+Opening the editor and saving do not add search or lookup events.
 
 ## Kanji cards and details
 
@@ -151,6 +183,12 @@ for the precise boundary and [Future plans](FUTURE-PLANS.md) for unfinished work
 **Statistics & history** lists words opened at least five times within the selected
 date range; choose **All history** to remove date limits. Dates use the computer's
 local calendar, with the Through date included. The five-opening threshold is fixed.
+
+Double-click a word row, or select it and press **Enter**, to switch immediately
+to Search with that exact entry's definition open. The search input contains its
+dictionary word. This revisit adds no lookup count or search-history entry;
+opening a different candidate afterward counts normally. A deleted or unavailable
+entry is reported without substituting another entry with the same spelling.
 Daily totals count deliberate definition openings, not study time or Anki reviews.
 
 Opening A, then A again without changing selection counts once. Opening A → B → A
@@ -173,6 +211,51 @@ automatic review schedule or a fluency measurement.
 Existing backup files are independent copies and are not erased by these actions.
 
 ## Settings, backups and data
+
+### AI word assistance
+
+In **Settings → AI word assistance**, choose **ChatGPT** (the default), **Ollama**,
+or **Off**. For ChatGPT, click **Continue with ChatGPT** and allow Gengo to use your
+eligible plan in the browser. Return to Gengo and choose a model from the account's
+catalog. **Refresh models** updates the choices. **Manage ChatGPT usage** opens
+your plan's usage controls; this feature shares your plan allowance. Saved
+connections can be selected, added, reauthorized or signed out separately.
+
+For Ollama, start your existing local service. Selecting Ollama or pressing
+**Refresh models** lists currently installed local models, including their tags.
+Choose any listed model; the choice is saved separately from your ChatGPT model.
+The app does not install models or fall back to another provider. A model being
+installed does not establish that it is good at Japanese.
+
+At the bottom of an opened entry, **Check definition** expands an inline panel.
+For unmatched text, use **Help identify**. Edit the context and question, then
+press **Ask AI**. The answer shows suggested expression/reading/meaning, reasoning,
+alternatives and uncertainty. Follow up in the same panel, or use **New
+conversation**. **Cancel request** stops waiting; changing words/searches also
+cancels and discards stale answers. Dictionary definitions remain separate.
+
+**Copy suggested definition** copies the proposed meaning. **Use in personal
+entry…** prefills the inline entry form for your review; it does not save until
+you press **Save entry**. AI requests, answers, and drafts create no history,
+lookup counts or personal entries. Only opening dictionary definitions and
+explicitly saving personal entries have their usual effects.
+
+ChatGPT sends the displayed context, selected dictionary entry and analyzer
+reading/inflection, your question, and that panel's earlier exchanges to OpenAI.
+It does not send your personal history or the rest of your personal dictionary.
+Ollama sends the same payload only to `127.0.0.1:11434`. These features have no web
+search or executable tools; an identification is a model suggestion, not sourced
+verification. Context is limited to 12,000 characters (centered near the selected
+occurrence for longer passages), questions to 2,000, and requests to three minutes.
+After six follow-ups, start a new conversation. Answers are not saved across
+searches or app restarts. Set **Off** to disable AI requests entirely.
+
+Gengo stores its own ChatGPT registrations and tokens under the data folder's
+`ai/` directory, encrypted for the current Windows user. They are separate from
+the personal database and excluded from backups. Sign in again on another
+computer. Gengo does not use Codex credentials. A disconnected or exhausted plan
+does not prevent ordinary dictionary lookup. See [AI assistance details](AI-ASSISTANCE.md)
+for the tested coverage and limitations.
 
 Ctrl+Plus and Ctrl+Minus change reading size in **2-point steps**, including
 numpad keys. **Settings → Reading appearance** controls the same saved size.

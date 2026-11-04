@@ -5,6 +5,25 @@ using Kotoba.Core;
 using Kotoba.Infrastructure;
 using Microsoft.Data.Sqlite;
 
+if (args.FirstOrDefault() == "--ai-probe")
+{
+    if (args.Length != 3 || !Path.GetFullPath(args[2]).Contains(Path.DirectorySeparatorChar + ".tools" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Pass a model and isolated .tools reference directory.");
+    using var http = AiHttp.Create(local: true); var assistant = new OllamaWordAssistant(http);
+    using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+    var watch = Stopwatch.StartNew();
+    var identified = await assistant.Ask(args[1], new("ギルガメッシュ", "ギルガメッシュが来た。", null, "Is this a name? Explain what can and cannot be inferred from this context.", []), timeout.Token);
+    Console.WriteLine($"LOCAL IDENTIFICATION {watch.Elapsed.TotalSeconds:F1}s: " + JsonSerializer.Serialize(identified));
+    var installed = ReferenceStore.InstalledDirectory(Path.Combine(Path.GetFullPath(args[2]), "reference")) ?? throw new InvalidDataException("Missing reference fixture.");
+    using var lexicon = new ReferenceStore(Path.Combine(installed, "reference.sqlite"));
+    using var probeMorphology = new UniDicMorphology(Path.Combine(installed, "UniDic"));
+    var observed = new AnalysisEngine(lexicon, probeMorphology).Analyze("床に本を置いた。", []).Units.First(u => u.Surface == "床");
+    var floor = lexicon.Find("床").First(e => e.Senses.SelectMany(s => s.Glosses).Any(g => g.Contains("floor", StringComparison.Ordinal)));
+    watch.Restart();
+    var confirmed = await assistant.Ask(args[1], new("床", "床に本を置いた。", floor, "Which reading and meaning fit this sentence? Does it mean bed here?", [], observed.Reading, observed.Inflection), timeout.Token);
+    Console.WriteLine($"LOCAL CONTEXT CHECK {watch.Elapsed.TotalSeconds:F1}s: " + JsonSerializer.Serialize(confirmed));
+    return;
+}
+
 if (args.FirstOrDefault() == "--anki-probe")
 {
     using var client = new AnkiKanjiClient();
@@ -40,6 +59,7 @@ var passed = 0; var failed = 0;
 void Check(bool condition, string description) { if (condition) { passed++; Console.WriteLine("PASS " + description); } else { failed++; Console.WriteLine("FAIL " + description); } }
 void Throws(Action action, string description) { try { action(); Check(false, description); } catch (Exception) { Check(true, description); } }
 await AnkiChecks.Run(Check);
+await WordAssistanceChecks.Run(Check);
 var ground = await KanjiDictionary.Find("地");
 Check(ground is not null && ground.Groups.SelectMany(g => g.Meanings).Contains("earth") && ground.Groups.SelectMany(g => g.Readings).Where(r => r.Type == "ja_on").Select(r => r.Value).SequenceEqual(["チ", "ジ"]), "verified bundled KANJIDIC2 supplies 地 meanings and On readings offline");
 var face = await KanjiDictionary.Find("面");
@@ -121,6 +141,24 @@ try
     {
         using var lexicon = new ReferenceStore(Path.Combine(installed, "reference.sqlite")); using var morphology = new UniDicMorphology(Path.Combine(installed, "UniDic")); var engine = new AnalysisEngine(lexicon, morphology);
         Analysis Analyze(string text) => engine.Analyze(text, []);
+        var evilUnit = Analyze("悪").Units.Single();
+        var evilMatches = LookupCandidates.For(evilUnit, lexicon, []);
+        Console.WriteLine("悪 LOOKUP " + string.Join(" | ", evilMatches.Select(e => e.Id + " " + e.Expression + " [" + string.Join(",", e.CompatibleReadings("悪").Select(k => k.Text)) + "]")));
+        Check(new[] { "あく", "わる" }.All(reading => evilMatches.Any(e => e.CompatibleReadings("悪").Any(k => k.Text == reading))), "悪 lookup retains both あく and わる exact-entry readings alongside the contextual root");
+        Check(evilMatches.Select(e => e.Id).Take(evilUnit.EntryIds.Length).SequenceEqual(evilUnit.EntryIds) && evilMatches.Select(e => e.Id).Distinct().Count() == evilMatches.Length,
+            "lookup keeps contextual candidates first and deduplicates exact matches by entry identity");
+        foreach (var expression in new[] { "悪", "生", "上手", "明日", "人気", "行った" })
+        {
+            var units = Analyze(expression).Units;
+            Check(units.All(unit => lexicon.Find(unit.Surface).All(exact => LookupCandidates.For(unit, lexicon, []).Any(e => e.Id == exact.Id))),
+                "word lookup preserves every exact surface entry: " + expression);
+        }
+        var staleEvil = evilUnit with { EntryIds = evilUnit.EntryIds.Take(1).ToArray() };
+        Check(lexicon.Find("悪").All(exact => LookupCandidates.For(staleEvil, lexicon, []).Any(e => e.Id == exact.Id)), "older saved candidate lists gain missing exact entries at lookup time");
+        var personalEvil = new PersonalEntry("personal:evil-check", "悪", "あく", "Personal override", "");
+        var withOverride = LookupCandidates.For(evilUnit, lexicon, [personalEvil]);
+        Check(withOverride[0].Id == personalEvil.Id && lexicon.Find("悪").All(exact => withOverride.Any(e => e.Id == exact.Id)), "personal overrides remain first while all built-in homographs stay available");
+        Check(!evilMatches.Any(e => e.Kanji.Any(k => k.Text == "悪魔")), "exact-entry alternatives do not expand a character into unrelated containing compounds");
         void Root(string text, string expected, string layer)
         {
             var result = Analyze(text); var unit = result.Units.FirstOrDefault(u => u.Inflection?.Root == expected);

@@ -15,6 +15,8 @@ optional kanji cards read your local Anki deck through AnkiConnect.
   matching, Common/JLPT parity, word forms and actual grammar coverage.
 - [AnkiConnect integration](.docs/anki-connect.md) — setup, read-only API calls,
   exact kanji matching, caching and failures.
+- [AI word assistance](.docs/AI-ASSISTANCE.md) — optional ChatGPT/Ollama setup,
+  inline context checks and identification, data handling and limitations.
 - [Repository structure](.docs/repository-structure.md) — code/file responsibilities,
   checks, scripts, generated output and private data.
 - [Tools used](.docs/tools-used.md) — stack, dependencies, prerequisites and commands.
@@ -31,7 +33,13 @@ documentation is available alongside the app without an internet connection.
 
 ## Run
 
-Open `artifacts/Gengo/Gengo.exe` after building the self-contained package.
+Open the permanent **Gengo.exe** shortcut in the project root (the file is
+`Gengo.exe.lnk`). It launches the latest successful build from
+`artifacts/Gengo/Gengo.exe`. Both normal `scripts/build.ps1` and `-Publish` builds
+refresh this one folder and recreate the shortcut with Gengo's icon. Close Gengo
+before building. Old per-feature preview folders are no longer used. Build output
+and the machine-specific shortcut are Git-ignored; only source/resources/scripts
+belong in the repository.
 The folder includes its .NET runtime; keep the DLLs and `LICENSES` with the app.
 Gengo is the new name for Kotoba. Existing data remains in the original
 `%LOCALAPPDATA%/Kotoba` folder, so entries, history, settings and installed resources

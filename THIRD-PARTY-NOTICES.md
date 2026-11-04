@@ -6,6 +6,14 @@ history are stored independently. Dictionary installation sends no personal text
 - .NET 10 / WPF © Microsoft and contributors, MIT. See `LICENSES/dotnet.txt`
   and `LICENSES/dotnet-third-party.txt`.
 - Microsoft.Data.Sqlite 10.0.14, MIT; `LICENSES/microsoft-data-sqlite.txt`.
+- Microsoft.IdentityModel.JsonWebTokens, Tokens, Logging and Abstractions 8.23.0,
+  © Microsoft Corporation, MIT; `LICENSES/identitymodel.txt`. Used for signed
+  OpenID Connect identity-token validation. Source commit
+  `8b16f418b3d587416d293e9ba34c5d310781cdb3` in
+  [IdentityModel Extensions](https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet).
+- System.Security.Cryptography.ProtectedData 10.0.14, Microsoft/.NET, MIT;
+  `LICENSES/dotnet.txt` and `LICENSES/dotnet-third-party.txt`. Windows DPAPI
+  protects Gengo's own ChatGPT credentials for the current Windows account.
 - SQLitePCLRaw 3.0.5, Apache 2.0; `LICENSES/sqlitepclraw.txt`. SQLite is public
   domain: <https://sqlite.org/copyright.html>.
 - NMeCab / LibNMeCab 0.10.2 © Tsuyoshi Komuta, a C# port of MeCab. Gengo

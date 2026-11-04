@@ -42,11 +42,11 @@ category should affect matching. Currently both categories participate equally.
 
 ## Optional local-model grammar mode
 
-DESIGN discusses optional Ollama use. This build has no model installation,
-selection, inference path or fallback to one. Any such addition needs a deliberate
-choice about local runtime requirements, resource use, uncertainty, text handling,
-cancellation and comparison with built-in rules. It must not silently replace
-the offline authored mechanism or claim unsupported interpretation as fact.
+AI word assistance now supports optional ChatGPT/Ollama selection and word-level
+context checks/identification; see [AI-ASSISTANCE.md](AI-ASSISTANCE.md). It has no
+automatic fallback or model installation. Explain grammar still uses only authored
+built-in rules. Adding model-based sentence grammar remains separate work needing
+evaluation against those rules and explicit presentation of uncertainty.
 
 ## Release readiness and updates
 

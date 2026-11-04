@@ -13,6 +13,10 @@ For development commands see [Tools used](tools-used.md) and
 | `MainWindow.xaml` | Search, personal editor, statistics/history and settings layout |
 | `MainWindow.xaml.cs` | Startup, search/cancellation, selections, personal actions, history, resources and backup UI |
 | `MainWindow.Entry.cs` | Dictionary result layout, all senses/restrictions/other forms, formatted personal results, clipboard text |
+| `MainWindow.InlineEntry.cs` | Inline personal-entry drafts, validation, save and reanalysis in Search |
+| `MainWindow.Ai.cs` | Provider/account/model Settings, inline AI requests, follow-ups, cancellation and suggestion drafts |
+| `MainWindow.Statistics.cs` | Double-click/Enter statistics-to-definition navigation by stable entry identity without recounting |
+| `DefinitionClipboard.cs` | Plain-text/HTML clipboard payloads for all definitions |
 | `MainWindow.Kanji.cs` | Async Anki cards, source labels and detailed character popup |
 | `MainWindow.TextSize.cs` | Persistent reading size and terminology panel |
 | `DefinitionFormatting.cs` | Native rich-definition serialization and formatting handlers |
@@ -29,6 +33,10 @@ implements literal overrides, dictionary-backed grouping and inflection explanat
 `GrammarEngine.cs` is the authored rule catalog. `LookupSelection.cs` handles
 deduplication of the currently open entry. `EntryPresentation.cs` handles short
 labels, terminology, other-form filtering and Anki bracket notation.
+`WordAssistance.cs` defines the provider interface, bounded context/prompt,
+structured response schema and validation, without network/storage dependencies.
+`LookupCandidates.cs` combines contextual candidates with exact surface/root
+entries at definition-opening time, retaining personal overrides and homographs.
 
 Core has no WPF or direct network/storage dependency. It takes lexicon/morphology
 interfaces so behavior can be checked without loading every external resource.
@@ -43,6 +51,8 @@ interfaces so behavior can be checked without loading every external resource.
 | `Resources/kanjidic2-all.json.zip` | Unchanged pinned source data embedded at build time |
 | `PersonalStore.cs` | Personal schema/migrations, entries/settings, event queries, backup/restore validation |
 | `AnkiKanjiClient.cs` | Read-only local API, candidate cleaning, exact matches, cache/profile checks |
+| `WordAssistants.cs` | Ollama discovery/chat and ChatGPT model catalog/Responses SSE adapters |
+| `ChatGptAccounts.cs` | Gengo's own OAuth registrations, OIDC validation, Windows-protected credentials, refresh and sign-out |
 
 ## Executable checks: `tests`
 
@@ -60,7 +70,10 @@ popups, categories and rich formatting. It modifies only its isolated fixtures.
 - `Directory.Build.props`: nullable/implicit usings, current language version,
   deterministic builds and warnings as errors.
 - `global.json`: .NET 10 stable SDK selection and roll-forward policy.
-- `scripts/build.ps1`: compile or self-contained Windows x64 publish.
+- `scripts/build.ps1`: refresh the stable self-contained build and root shortcut;
+  normal mode also compiles Debug, while `-Publish` skips that extra compilation.
+- `scripts/create-shortcut.ps1`: create/repair the permanent, machine-specific
+  root `Gengo.exe.lnk` launcher and its icon.
 - `scripts/check.ps1`: core checks and optional installed-reference/parity/WPF runs.
 - `scripts/launch.ps1`: open the published snapshot with normal data or an explicit
   isolated directory. It does not rebuild.
@@ -72,8 +85,10 @@ internals, resources, integrations, tooling, workflow and future plans. DESIGN i
 the agreed specification; IMPLEMENTATION is historical evidence/status.
 `THIRD-PARTY-NOTICES.md` and `LICENSES/` accompany redistributed packages.
 
-`artifacts/Gengo/` is a generated published snapshot, with documentation copied
-alongside the executable. `.tools/` contains project-local build caches, downloaded
+`artifacts/Gengo/` is the single generated application package, refreshed by each
+successful build, with documentation alongside the executable. Per-feature
+preview folders are no longer used. The root `Gengo.exe.lnk` is generated and
+Git-ignored too. `.tools/` contains project-local build caches, downloaded
 fixtures, isolated databases and verification logs. `bin/` and `obj/` are generated.
 These generated directories are ignored by Git and are not the user's normal data.
 

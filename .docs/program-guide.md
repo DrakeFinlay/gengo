@@ -109,7 +109,7 @@ context; others match explicit constructions. Cards hold pattern names, authored
 English explanations, uncertainty and one or more source spans. The UI can
 highlight separated components such as しか and a negative predicate.
 
-No model is loaded or called. A zero-card result means no implemented rule matched,
+Explain grammar does not load or call a model. A zero-card result means no implemented rule matched,
 not that the sentence lacks grammar. Coverage is still the prototype milestone;
 broader literary interpretation and the design's optional model mode are unfinished.
 
