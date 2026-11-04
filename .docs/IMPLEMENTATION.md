@@ -425,6 +425,219 @@ the same checks passed outside the sandbox using isolated generated data. No
 personal database was used for the test. Native launch similarly required the
 environment's normal GUI-launch approval.
 
+### Copy all definitions (2026-11-04)
+
+Added **Copy all definitions** directly beneath each opened entry's senses,
+before Other Forms. A single sense copies its semicolon-separated glosses without
+the display's `1.` prefix; multiple senses retain sequential numbers and Windows
+line breaks. Copies include Unicode plain text and escaped Windows clipboard HTML
+with explicit `<br>` breaks for rich-text paste into Anki. Only glosses are copied;
+headword, reading, tags, restrictions and information remain in the display.
+The action does not open a definition again or write history/counts.
+
+Validation: `scripts/check.ps1` passed 106 core/infrastructure checks including
+full-set read-only Common/JLPT parity against the pinned Anki Stats baseline.
+The WPF suite passed with isolated `.tools/ui-data`, including real 程度 (one
+sense) and 意識 (three senses) button clicks, exact plain-text contents, HTML
+line breaks, placement below meanings, unchanged click counts, HTML escaping,
+internal newlines and UTF-8 clipboard offsets. App build passed without warnings.
+Clipboard formats were verified; a live paste into Anki was not exercised.
+The running Gengo instance locked the usual package DLLs, so the self-contained
+preview was successfully built to `artifacts/Gengo-copy-definitions/Gengo.exe`
+with licenses and guides, leaving that instance running.
+Morphology/grammar coverage and documented gaps are unchanged.
+
+### Personal entry from empty search results (2026-11-04)
+
+Searches with zero matched dictionary units now immediately show the submitted
+text, a no-match message and **Add personal dictionary item** in Words. Clicking
+the button expands an inline form in Search with the entire submitted text,
+including spaces, as the editable expression; nothing is persisted before Save entry.
+The form has optional reading/notes, Personal words/Names category and a multiline
+plain-text definition, plus Save entry/Cancel. Required-field and entry-length
+validation errors appear inside the form. The Personal dictionary editor retains
+its richer formatting tools for later editing.
+Unmatched clicked units share this presentation and prefill their own surface.
+Reopening an unmatched history result or reanalyzing after personal changes also
+restores the action. Successful searches clear it normally.
+
+The existing validated personal store and passage reanalysis pipeline supplies
+the underlying behavior. Save makes the expression available immediately to the
+active analysis and displays the matching new definition in Search without
+another search or lookup event. Deliberate subsequent definition openings count
+normally. Cancel closes the form without persistence or navigation.
+
+Validation: 106 core/data checks, full-set read-only Common/JLPT parity and all WPF
+checks passed using `.tools/ui-data`. WPF assertions cover immediate empty-state
+visibility, inline full-expression prefill, no premature persistence, inline
+required-field validation, cancel, saving all fields (including multiline text),
+reanalysis while remaining in Search, history/count preservation, subsequent
+definition display and cleanup on successful search. The generated entry fixture
+is removed before/after the suite so it cannot affect list-layout checks on later
+runs. App build passed with no warnings or errors.
+No morphology or grammar rules or coverage changed.
+
+### Optional AI word assistance (2026-11-04)
+
+Added Check definition after matched senses/other forms and Help identify after
+unmatched results. Both expand inline Search panels with editable context/questions,
+follow-ups, cancellation, provider/model labels, alternatives and uncertainty.
+Copy suggested definition and Use in personal entry… support deliberate review;
+only an explicit personal-entry Save persists a suggestion. AI requests/results
+create no searches/clicks or automatic dictionary/reading changes.
+
+Settings supports Off / ChatGPT (initial default) / Ollama and model choices per
+provider. ChatGPT uses Gengo-owned browser sign-in/PKCE, signed OIDC validation,
+separate account registrations, Windows-protected credentials, serialized rotating
+refresh, revocation/sign-out, live account model discovery and completed-only
+Responses SSE. It never reads Codex credentials. Ollama discovers installed tagged
+models through the running loopback service and checks for local execution before
+chat. No fallback, tools, web search or model downloads are implemented. Selected
+candidate senses/restrictions, available analyzer evidence, shown passage context
+and only the panel's conversation form the bounded request. Long passages window
+around the selected occurrence. See [AI-ASSISTANCE.md](AI-ASSISTANCE.md) for protocol
+references, credential storage and detailed limits.
+
+Validation: 145 core/infrastructure checks and 66 WPF checks passed with isolated
+`.tools/ui-data`, including full-set read-only Common/JLPT parity. New coverage
+includes actual loopback OAuth callback using synthetic signed credentials,
+invalid identity/signature/expiry/nonce, missing consent scope, concurrent refresh,
+separate same-email registrations, successful/failed revocation, dynamic model
+catalogs, bounded structured output, incomplete/interrupted/late-failing SSE, Off,
+follow-ups, suggestion drafts, unchanged counts/history and stale-response rejection.
+Native render previews also verified model-picker contrast and display/menu labels.
+
+The installed qwen2.5:7b-instruct completed real loopback requests with synthetic
+Gilgamesh and 床 examples. Literal Japanese prompt text improved identification and
+meaning over escaped inner JSON, but that run still produced a romaji name reading
+and an incorrect とこ reading for floor. These observations are documented as model
+quality gaps, not replaced by fixtures or counted as linguistic coverage. Live
+ChatGPT account eligibility/sign-in/inference still require the user's first
+connection; synthetic protocol tests do not establish them. Existing morphology
+and authored sentence-grammar coverage/gaps are unchanged. App packaging includes
+the pinned IdentityModel 8.23.0 and ProtectedData 10.0.14 libraries and notices.
+Debug build and self-contained Release packaging passed without warnings/errors;
+the separate local preview is `artifacts/Gengo-ai-assistance/Gengo.exe`.
+
+### Reading-area growth and furigana clipping (2026-11-04)
+
+The passage adorner now clips to the actual ScrollContentPresenter viewport,
+requires base glyph rectangles and reading text to be visible, and clears cached
+geometry when scrolling/resizing invalidates it. A scroll-offset guard prevents
+rendering a cache belonging to an earlier viewport. This stops readings escaping
+above/below the editor or appearing while their base text is clipped.
+
+Input/passage height limits are doubled: normally 184/310 WPF units, with doubled
+font-dependent/compact limits too. Both grow naturally for wrapped/spaced or
+multiline text, then scroll internally. Content/viewport changes queue bounded
+height recalculation; short windows share available height and reserve definition
+space. No LayoutUpdated loop or periodic rendering is introduced.
+
+Validation: 145 core/data and 68 WPF checks passed, including read-only Common/JLPT
+parity. Checks use generated `.tools/ui-data`, including long Japanese text with
+intentional spaces and blank lines. At a 1040-unit window the input/passage
+reached 184/310 while Words retained 102 units. At 800×620, both long text areas
+shared space and Words retained 99 units. Actual adorner drawing bounds stayed
+inside the content viewport after scrolling and ruby returned to idle without
+repeated rebuilds. Native render previews were inspected. Source text/selection
+copy retained intentional spaces and paragraph breaks. No morphology/grammar
+rules or coverage changed; pinned resources and history/count semantics remain
+unchanged.
+
+### Complete surface-entry/readings lookup (2026-11-04)
+
+Definition opening previously resolved only the analyzer's candidate IDs. UniDic
+can analyze bare 悪 as the adjective root 悪い, so exact noun entries 悪【あく】
+and 悪【わる】 were absent from the definition choices even though both were in
+the installed dictionary. `LookupCandidates.For` now combines contextual IDs,
+every exact surface match and any explicit inflected-root matches, deduplicated
+by entry identity. Exact personal expressions stay first; contextual rankings
+otherwise retain their existing priority. Resolution happens at lookup time, so
+older saved analyses gain exact alternatives without changing saved segmentation.
+
+A bounded compact chooser above the main definition card makes the other entries
+visible before a long sense list. Each labeled spelling/reading has a meaning
+tooltip and explicitly opens the corresponding full entry. Existing detailed
+candidate previews below, all senses/restrictions, compatible Other Forms and
+classification/resource pins remain intact. This is exact-form/root lookup, not
+substring search across compounds or a promise of Jisho's whole result catalog.
+
+Validation: 156 core/data and 74 WPF checks passed with isolated `.tools/`
+fixtures, including full-set read-only Common/JLPT parity. Actual pinned dictionary
+tests retain both 悪 readings, cover 悪/生/上手/明日/人気/行った exact matches,
+contextual priority, deduplication, older candidate lists, personal precedence and
+no unrelated compound expansion. WPF checks open both 悪 noun entries, compare
+every displayed sense against the source, check correct Anki-copy readings,
+top-of-list discoverability and exactly one event per deliberate alternative
+opening. Rendering choices produces no event. Morphology and authored grammar
+rules/coverage are unchanged; candidate recovery does not claim new analysis.
+
+### Statistics word revisit (2026-11-04)
+
+Double-clicking a five-count statistics row, or pressing Enter on the selected
+row, resolves its stable entry ID and immediately opens that definition in Search.
+The input/passage show the canonical expression and selected entry reading;
+the definition pane scrolls to the top. Single-click still shows recorded contexts.
+No homograph is substituted when a historical personal/reference entry is missing;
+the current Search state remains intact and a status message explains availability.
+
+Revisit analysis is not persisted as a new search and the definition is not
+counted. Current lookup selection is synchronized so clicking the already-open
+word does not recount it. The old submitted-passage link is cleared, ensuring a
+later deliberate alternative lookup cannot attach to unrelated previous text.
+Normal subsequent alternative openings retain their counting semantics.
+
+Validation: 156 core/data and 79 WPF checks passed with isolated `.tools/ui-data`,
+including read-only Common/JLPT parity. WPF raises a row double-click for an actual
+five-count 悪【あく】 record and verifies navigation, exact homograph/reading,
+input, scroll position, unchanged history/counts, no recount on the same word,
+subsequent alternative counting without an unrelated search link, and safe handling
+of a deleted personal identity. No storage schema, morphology or grammar rules
+or coverage changed.
+
+### Gengo application icon (2026-11-04)
+
+Added a simple ivory 言 glyph on a teal rounded tile, with transparent outer
+corners. Assets include a portable outlined SVG, 512-pixel PNG preview and
+nine-size ICO (16–256 pixels). `ApplicationIcon` embeds it in the Windows executable;
+the same ICO is an embedded WPF Resource assigned to MainWindow.Icon for the
+window/taskbar. No runtime font dependency or external icon file is needed.
+
+Debug build and all 235 existing checks passed. Windows extracted a 32×32 icon
+from the built executable with the intended teal tile color (#246F61). Existing
+WPF checks exercise loading the resource through MainWindow. This is a visual
+asset/project-resource change; no morphology, grammar, storage or history/count
+behavior changed. Asset source and size details are in `Assets/README.md`.
+
+### Single build folder and permanent root launcher (2026-11-04)
+
+Consolidated local packages into `artifacts/Gengo`, removing eight obsolete
+feature-preview directories (1.13 GiB). No files under artifacts were tracked;
+the directory remains Git-ignored. Cleanup verified immediate-child workspace
+paths, no linked directories, no running preview processes and no personal
+database before removal. Personal data/reference fixtures were not removed.
+
+Added root `Gengo.exe.lnk` (displayed by Windows as Gengo.exe), generated by
+`scripts/create-shortcut.ps1` and ignored by Git. It uses the Gengo executable's
+icon and a hidden PowerShell invocation of `scripts/launch.ps1`, which launches
+the stable package and clears inherited test-data overrides. The shortcut remains
+at the same location as builds change and is recreated with the current project
+path on each build.
+
+Both normal `scripts/build.ps1` and compatible `-Publish` refresh the stable
+self-contained package, documentation/licenses and shortcut. Normal mode also
+compiles Debug first. Builds stage inside verified `.tools/` paths before replacing
+the stable directory, restore the previous directory if the switch fails, and
+clean temporary/previous builds after success. A running stable Gengo prevents
+replacement and reports that the app must be closed, preserving unsaved work.
+Failed compilation/publish leaves the existing working package intact. AGENTS
+and development/user docs now direct future changes to this single output.
+
+Validation: normal build produced the stable package/shortcut successfully;
+shortcut target, quoted launcher arguments and icon path were inspected, and
+Git confirmed both generated locations are ignored/untracked. No application
+behavior, morphology/grammar coverage or history/count semantics changed.
+
 Dependency/resource provenance: [NMeCab](https://github.com/komutan/NMeCab),
 [UniDic-lite](https://github.com/polm/unidic-lite),
 [jmdict-simplified](https://github.com/scriptin/jmdict-simplified),

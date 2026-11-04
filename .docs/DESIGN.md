@@ -107,6 +107,12 @@ Definitions use a word/reading column beside their senses. Grammar is in the
 right-hand details pane. Added spaces are presentation, not changes to source
 offsets, saved text, custom matching, or selection lookup/copy.
 
+Reading-area revision (2026-11-04): input and passage grow naturally before
+scrolling, with doubled height limits (normally 184/310 WPF units), shared
+responsively on short windows to retain usable definition panes. Ruby uses the
+same content viewport as the passage: do not draw readings for clipped base text
+or reuse ruby geometry from a previous scroll offset.
+
 Kanji cards/popups initially contain the character and meanings from exact
 single-character cards in Anki. Default mapping discovered on the user's machine:
 deck 漢字 (including children), Front = character, Back = meaning. Settings exposes
@@ -167,6 +173,13 @@ Selecting another sentence unit replaces the current dictionary selection.
 Alternatives appear further down the same results area. Proposed counting
 interaction: alternatives have a preview and an explicit open/select action.
 Scrolling/rendering an alternative is not a lookup; deliberately opening it is.
+
+Lookup completeness revision (2026-11-04): resolve the analyzer's contextual
+candidates together with every exact dictionary entry for the clicked spelling
+and explicit inflected root. Context ranks candidates but must not hide other
+homographs/readings. Show a compact entry chooser above the selected definitions,
+with full candidate previews below. Preserve source senses, reading restrictions
+and personal-entry precedence. This also applies when opening saved analyses.
 
 Word conjugation explanations follow dictionary definitions. Sentence grammar
 cards remain associated with the submitted text even when word selection changes.
@@ -314,6 +327,25 @@ Optional generated explanations can broaden coverage but do not demonstrate
 completion of the built-in grammar goal. If native coverage is inadequate,
 report the measured gap and revisit scope with the user.
 
+### Optional AI word assistance (authorized 2026-11-04)
+
+Separate from Explain grammar, **Check definition** beneath matched definitions
+and **Help identify** beneath unmatched text expand inline Search panels. They
+allow editable context/questions and follow-ups with results shown separately
+from dictionary senses. An AI suggestion is not verified dictionary data.
+Suggested entries require review and an explicit save through the inline form.
+
+The user authorizes a ChatGPT default using eligible Plus-plan sign-in, selectable
+Ollama models discovered from the running local installation, and Off. Save model
+choices per provider and support changing providers without affecting offline
+dictionary use. No automatic fallback/downloads, history access or tool execution.
+Only explicit requests send the shown context/question, selected dictionary
+candidate, analyzer evidence and that panel's conversation to the chosen provider.
+Cloud use for this feature is authorized; the earlier local-only grammar proposal
+does not restrict this separate feature. Settings exposes connection/model choices
+and explains cloud data transmission and plan usage. See [AI-ASSISTANCE.md](AI-ASSISTANCE.md)
+for implemented limits, credential handling and actual evaluation.
+
 ## 8. Statistics and history
 
 Opening a definition counts; analysis, visible words, ruby, scrolling, grammar
@@ -336,6 +368,9 @@ Proposed initial section:
 - Words sorted by count, then latest click; rows require five clicks within range.
 - Root form, reading, count, first/last click within range.
 - Row details show clicked forms and saved sentence context.
+- Double-clicking a word row (or pressing Enter) revisits that exact entry on
+  Search, with the canonical word in the input and its definition already open.
+  This statistics inspection creates no new search or lookup event.
 - Daily lookup totals include all events, including words below five.
 - Chronological submitted-text history with reopen/delete controls.
 

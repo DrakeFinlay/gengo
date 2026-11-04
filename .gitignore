@@ -2,5 +2,6 @@
 **/obj/
 .tools/
 artifacts/
+/Gengo.exe.lnk
 *.user
 *.suo

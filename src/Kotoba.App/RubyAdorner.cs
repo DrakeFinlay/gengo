@@ -18,6 +18,7 @@ internal sealed class RubyAdorner : Adorner, IDisposable
     private readonly double size;
     private readonly Brush brush;
     private DrawingGroup? cached;
+    private Vector cachedScrollOffset;
     private bool queued;
     private bool disposed;
     internal int RebuildCount { get; private set; }
@@ -33,11 +34,12 @@ internal sealed class RubyAdorner : Adorner, IDisposable
         QueueRebuild();
     }
     private void LoadedDocument(object sender, RoutedEventArgs e) => QueueRebuild();
-    private void DocumentSizeChanged(object sender, SizeChangedEventArgs e) => QueueRebuild();
+    private void DocumentSizeChanged(object sender, SizeChangedEventArgs e) => InvalidateGeometry();
     private void Scrolled(object sender, ScrollChangedEventArgs e)
     {
-        if (e.VerticalChange != 0 || e.HorizontalChange != 0 || e.ViewportWidthChange != 0 || e.ExtentHeightChange != 0) QueueRebuild();
+        if (e.VerticalChange != 0 || e.HorizontalChange != 0 || e.ViewportWidthChange != 0 || e.ViewportHeightChange != 0 || e.ExtentHeightChange != 0) InvalidateGeometry();
     }
+    private void InvalidateGeometry() { cached = null; InvalidateVisual(); QueueRebuild(); }
     private void QueueRebuild()
     {
         if (disposed || queued) return; queued = true;
@@ -49,29 +51,57 @@ internal sealed class RubyAdorner : Adorner, IDisposable
     }
     private void Rebuild()
     {
+        var scrollOffset = new Vector(document.HorizontalOffset, document.VerticalOffset);
         var drawing = new DrawingGroup();
         using (var context = drawing.Open())
         {
+            var viewport = ContentViewport();
+            context.PushClip(new RectangleGeometry(viewport));
             var dpi = VisualTreeHelper.GetDpi(document).PixelsPerDip;
             foreach (var (run, offset, length, reading) in parts)
             {
                 var start = run.ContentStart.GetPositionAtOffset(offset); var end = start?.GetPositionAtOffset(length); if (start is null || end is null) continue;
                 var a = start.GetCharacterRect(LogicalDirection.Forward); var b = end.GetCharacterRect(LogicalDirection.Backward);
-                if (a.IsEmpty || b.IsEmpty || a.Top > document.ActualHeight || b.Bottom < 0) continue;
+                // An adorner is outside the editor's scroll-content clipping. Require
+                // the base glyphs to be visible too, rather than drawing orphan ruby.
+                if (a.IsEmpty || b.IsEmpty || a.Top < viewport.Top || b.Bottom > viewport.Bottom || a.Bottom <= viewport.Top || a.Top >= viewport.Bottom) continue;
                 var width = Math.Abs(a.Y - b.Y) < 2 ? b.Right - a.Left : Math.Min(document.ActualWidth - a.Left, length * size);
                 if (width <= 0) continue;
                 var formatted = new FormattedText(reading, CultureInfo.GetCultureInfo("ja-JP"), FlowDirection.LeftToRight, new Typeface("Yu Gothic UI"), size * .43, brush, dpi);
                 if (formatted.Width > width)
                     formatted = new FormattedText(reading, CultureInfo.GetCultureInfo("ja-JP"), FlowDirection.LeftToRight, new Typeface("Yu Gothic UI"), size * .43 * width / formatted.Width, brush, dpi);
-                context.DrawText(formatted, new Point(a.Left + Math.Max(0, (width - formatted.Width) / 2), a.Top - size * .55));
+                var position = new Point(a.Left + Math.Max(0, (width - formatted.Width) / 2), a.Top - size * .55);
+                if (position.Y < viewport.Top || position.Y + formatted.Height > viewport.Bottom) continue;
+                context.DrawText(formatted, position);
             }
+            context.Pop();
         }
-        drawing.Freeze(); cached = drawing; RebuildCount++; InvalidateVisual();
+        drawing.Freeze(); cached = drawing; cachedScrollOffset = scrollOffset; RebuildCount++; InvalidateVisual();
     }
     protected override void OnRender(DrawingContext drawing)
     {
         RenderCount++;
-        if (cached is not null) drawing.DrawDrawing(cached);
+        if (cached is not null && cachedScrollOffset == new Vector(document.HorizontalOffset, document.VerticalOffset))
+        {
+            drawing.PushClip(new RectangleGeometry(ContentViewport())); drawing.DrawDrawing(cached); drawing.Pop();
+        }
+    }
+    private Rect ContentViewport()
+    {
+        static ScrollContentPresenter? Find(DependencyObject parent)
+        {
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is ScrollContentPresenter presenter) return presenter;
+                if (Find(child) is { } found) return found;
+            }
+            return null;
+        }
+        var viewport = new Rect(new Point(), document.RenderSize);
+        if (Find(document) is { } presenter)
+            viewport.Intersect(presenter.TransformToAncestor(document).TransformBounds(new Rect(new Point(), presenter.RenderSize)));
+        return viewport;
     }
     public void Dispose()
     {

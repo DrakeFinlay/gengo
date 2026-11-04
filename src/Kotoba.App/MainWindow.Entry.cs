@@ -27,6 +27,7 @@ public partial class MainWindow
     };
     private void OpenDefinition(Entry entry, Unit unit, bool count, bool refreshKanji = true)
     {
+        CancelAiRequests();
         if (count && lookupSelection.Open(entry.Id)) store.RecordClick(entry, unit.Surface, searchId);
         displayedEntry = entry; selectedUnit = unit; DefinitionPanel.Children.Clear(); AlternativesPanel.Children.Clear();
         var matchedSpelling = entry.Kanji.Any(k => k.Text == unit.Surface) || entry.Kana.Any(k => k.Text == unit.Surface)
@@ -85,6 +86,16 @@ public partial class MainWindow
             if (restrictions.Count > 0) senses.Children.Add(SelectableLabel((entry.CompatibleSenses(matchedSpelling, reading).Contains(sense) ? "" : "Other form only · ") + string.Join(" · ", restrictions), 12, Muted));
             foreach (var info in sense.Information) senses.Children.Add(SelectableLabel(info, 13, Muted));
         }
+        if (entry.Senses.Length > 0)
+        {
+            var copyDefinitions = ActionButton("Copy all definitions", () =>
+            {
+                Clipboard.SetDataObject(DefinitionClipboard.Create(entry), true);
+                Status.Text = "Copied all definitions · " + entry.Expression;
+            });
+            copyDefinitions.Name = "CopyAllDefinitions";
+            senses.Children.Add(copyDefinitions);
+        }
         var otherForms = EntryPresentation.OtherForms(entry, preferred, reading);
         if (otherForms.Length > 0)
         {
@@ -92,6 +103,7 @@ public partial class MainWindow
             senses.Children.Add(SelectableLabel(string.Join(" · ", otherForms.Select(f => f.Expression + (f.Reading == f.Expression ? "" : " 【" + f.Reading + "】") +
                 (f.Tags.Length == 0 ? "" : " (" + string.Join(", ", f.Tags.Select(EntryTag)) + ")"))), 14));
         }
+        AddAiAssistance(senses, unit.Surface, entry, unit);
         var definition = new Grid { Name = "EntryDefinition" };
         // At large text sizes or narrow widths, keep readable lines by stacking the
         // form above the senses rather than squeezing both into tiny columns.
@@ -109,6 +121,26 @@ public partial class MainWindow
             var divider = new Border { Name = "EntryDivider", Width = 1, Margin = new Thickness(15, 0, 15, 0), Background = (Brush)FindResource("BorderBrush"), HorizontalAlignment = HorizontalAlignment.Center };
             Grid.SetColumn(divider, 1); definition.Children.Add(divider); Grid.SetColumn(senses, 2);
         }
+        var alternatives = EntriesFor(unit).Where(candidate => candidate.Id != entry.Id).ToArray();
+        if (alternatives.Length > 0)
+        {
+            var choices = new StackPanel { Name = "EntryChoices" };
+            choices.Children.Add(ResultLabel("Other readings and entries", 14, Muted));
+            var buttons = new WrapPanel();
+            foreach (var alternative in alternatives)
+            {
+                var compatible = alternative.CompatibleReadings(unit.Surface).ToArray();
+                var alternativeReading = compatible.OrderByDescending(k => TextRules.Hiragana(k.Text) == unit.Reading).ThenByDescending(k => k.Common).FirstOrDefault()?.Text ?? alternative.Reading;
+                var candidateSpelling = alternative.Kanji.Any(k => k.Text == unit.Surface) ? unit.Surface : alternative.Expression;
+                var label = candidateSpelling + (candidateSpelling == alternativeReading ? "" : "【" + alternativeReading + "】");
+                var button = ActionButton(label, () => OpenDefinition(alternative, unit, true));
+                button.Name = "OpenAlternativeEntry"; button.Tag = alternative.Id;
+                button.ToolTip = string.Join("; ", alternative.Senses.FirstOrDefault()?.Glosses ?? []);
+                buttons.Children.Add(button);
+            }
+            choices.Children.Add(new ScrollViewer { Content = buttons, MaxHeight = 130, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+            DefinitionPanel.Children.Add(Card(choices));
+        }
         definition.Children.Add(title); definition.Children.Add(senses); DefinitionPanel.Children.Add(Card(definition));
         if (unit.Inflection is { } inflection)
         {
@@ -116,7 +148,6 @@ public partial class MainWindow
             foreach (var layer in inflection.Layers) p.Children.Add(SelectableLabel("• " + layer, 14));
             p.Children.Add(SelectableLabel(inflection.Explanation, 12, Muted)); DefinitionPanel.Children.Add(Card(p));
         }
-        var alternatives = unit.EntryIds.Where(id => id != entry.Id).Select(Resolve).OfType<Entry>().ToArray();
         if (alternatives.Length > 0) AlternativesPanel.Children.Add(ResultLabel("Other dictionary candidates", 19, null, new Thickness(0, 8, 0, 12)));
         foreach (var alternative in alternatives)
         {

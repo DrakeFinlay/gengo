@@ -39,13 +39,13 @@ From the repository root:
 
 ```powershell
 $sdk = 'C:/path/to/dotnet.exe'
-# Compile the WPF app.
+# Compile Debug and refresh the stable self-contained build/root shortcut.
 ./scripts/build.ps1 -DotnetPath $sdk
 # Run core/infrastructure checks.
 ./scripts/check.ps1 -DotnetPath $sdk
-# Publish the self-contained Windows x64 folder and bundled documentation.
+# Refresh the same stable folder/shortcut without the extra Debug compile.
 ./scripts/build.ps1 -DotnetPath $sdk -Publish
-# Launch the published snapshot; this does not build it.
+# Launch the latest successful stable build; this does not rebuild it.
 ./scripts/launch.ps1
 ```
 
