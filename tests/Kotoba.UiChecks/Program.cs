@@ -27,10 +27,26 @@ internal static class Program
             {
                 var deadline = Stopwatch.StartNew(); while (!window.ResourcesReady && deadline.ElapsedMilliseconds < 10000) await Task.Delay(25);
                 Check(window.ResourcesReady, "full-data resources initialize for UI checks");
+                const string reportedPassage = "あれだけ愉快そうだった男の哄笑が止まる。";
+                foreach (var size in new[] { 24d, 40d, 48d })
+                {
+                    window.FontSlider.Value = size;
+                    await window.Search(reportedPassage, false); await Task.Delay(150);
+                    var passageRuby = window.SentenceRuby!;
+                    var firstKanji = ((Paragraph)window.Sentence.Document.Blocks.FirstBlock).Inlines.OfType<Run>().First(r => Kotoba.Core.TextRules.HasKanji(r.Text));
+                    var baseTop = firstKanji.ContentStart.GetCharacterRect(LogicalDirection.Forward).Top;
+                    var bounds = VisualTreeHelper.GetDrawing(passageRuby)?.Bounds ?? Rect.Empty;
+                    Check(!bounds.IsEmpty && bounds.Width > 0 && bounds.Top >= 0 && bounds.Top < baseTop,
+                        $"reported passage paints first-line furigana inside the viewport at size {size}");
+                }
+                Capture(window, Path.Combine(args[0], "furigana-fixed-preview.png"));
+                window.FontSlider.Value = 24;
                 const string text = "それが巨大な鉄槌であり、自分がゴミのように吹き飛ばされ、地面に落ちた事だけ、判る。";
                 await window.Search(text, false); await Task.Delay(400);
                 var ruby = window.SentenceRuby ?? throw new Exception("Missing ruby layer"); var rebuilds = ruby.RebuildCount; var renders = ruby.RenderCount;
                 Check(rebuilds > 0 && renders > 0, "visible passage builds and paints ruby initially");
+                var initialRubyBounds = VisualTreeHelper.GetDrawing(ruby)?.Bounds ?? Rect.Empty;
+                Check(!initialRubyBounds.IsEmpty && initialRubyBounds.Width > 0 && initialRubyBounds.Height > 0, "initial passage paints actual furigana glyphs");
                 using var process = Process.GetCurrentProcess(); var cpu = process.TotalProcessorTime; var clock = Stopwatch.StartNew();
                 await Task.Delay(700); process.Refresh();
                 var cpuMs = (process.TotalProcessorTime - cpu).TotalMilliseconds;

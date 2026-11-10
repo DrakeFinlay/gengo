@@ -154,7 +154,10 @@ public partial class MainWindow : Window
         SentenceCard.Visibility = Visibility.Visible;
         if (renderedAnalysis == analysis && renderedSize == JapaneseSize) { ApplyWordStyles(highlight); return; }
         ruby?.Dispose(); ruby = null; wordRuns.Clear();
-        var paragraph = new Paragraph { Margin = new Thickness(0, JapaneseSize * 0.55, 0, 0), LineHeight = JapaneseSize * 2.0 };
+        // FlowDocument collapses the first paragraph's top margin. Padding keeps
+        // the first line's ruby space inside the editor's clipped viewport, with
+        // a small rounding allowance at different font sizes and display scales.
+        var paragraph = new Paragraph { Margin = new Thickness(0), Padding = new Thickness(0, Math.Ceiling(JapaneseSize * 0.55) + 1, 0, 0), LineHeight = JapaneseSize * 2.0 };
         Unit? previous = null;
         foreach (var unit in analysis.Units)
         {
