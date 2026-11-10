@@ -1,5 +1,28 @@
 # Implementation checkpoint — 2026-11-03
 
+## Search furigana regression fix — 2026-11-05
+
+On `codex/fix-search-furigana`, reproduced missing first-line readings after the
+viewport-clipping revision. WPF collapses the first paragraph's top margin, so
+base character rectangles started at Y=0 and ruby was placed above the viewport.
+The clipping guard correctly rejected that text. Replace the paragraph's top
+margin with internal padding, rounded upward with a one-unit allowance to avoid
+floating-point/layout rounding putting readings just outside the viewport.
+Keep viewport clipping and scroll-cache safeguards intact.
+
+The former initial-render check counted rebuild/render calls even when the
+drawing was empty. New WPF assertions require actual nonempty reading bounds,
+including first-line readings for the reported passage at 24, 40 and 48 units.
+The native preview was visually inspected; inner scrolling/clipping and idle
+render checks still pass. Validation: 156 core/data and 83 WPF checks passed with
+fresh isolated `.tools/furigana-ui-data`, including read-only full-set Common and
+N1–N5 parity against Anki Stats' pinned baseline. Reusing `.tools/ui-data` exposed
+an unrelated existing lookup-count assertion's reliance on the 200-event history
+page limit; fresh test history avoids that fixture accumulation.
+`scripts/build.ps1` completed with no warnings/errors and refreshed
+`artifacts/Gengo` and the root shortcut after closing Gengo.
+Morphology/grammar coverage and gaps are unchanged; this is a presentation fix.
+
 The user authorized implementation after the design review. Proposed defaults
 were adopted without further product questions. The design's original prohibition
 on implementation was superseded by that authorization. Work remains uncommitted
